@@ -1,0 +1,58 @@
+{
+  "name": "@mtarikucar/claude-password-manager",
+  "version": "1.0.0",
+  "description": "A local, encrypted password-manager MCP server that lets Claude Code use your own credentials with per-access auditing. Works on Linux, macOS and Windows.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "claude-password-manager": "dist/server.js",
+    "pm-cli": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "password-manager",
+    "vault",
+    "secrets",
+    "credentials"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mtarikucar/claude-password-manager.git"
+  },
+  "homepage": "https://github.com/mtarikucar/claude-password-manager#readme",
+  "bugs": {
+    "url": "https://github.com/mtarikucar/claude-password-manager/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "cli": "node dist/cli.js",
+    "dev:server": "tsx src/server.ts",
+    "dev:cli": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx test/vault.test.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

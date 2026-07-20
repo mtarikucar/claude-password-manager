@@ -1,0 +1,37 @@
+name: Publish to npm
+
+# Publishes @mtarikucar/claude-password-manager to npm. Trigger it either:
+#   • manually — Actions tab → this workflow → "Run workflow" (works from mobile), or
+#   • by pushing a version tag like  v1.0.1
+#
+# Requires a repository secret NPM_TOKEN containing an npm Automation token, or a
+# Granular Access Token with read+write to the @mtarikucar scope (either bypasses
+# the 2FA-to-publish requirement).
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  publish:
+    name: Build, test and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Test
+        run: npm test
+      # `npm publish` re-runs build+test via prepublishOnly, then publishes.
+      # publishConfig.access=public in package.json makes the scoped package public.
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

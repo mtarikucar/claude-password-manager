@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# Never commit a real vault or audit log if one is ever created in-tree.
+vault.json
+audit.log
