@@ -1,6 +1,6 @@
 {
   "name": "@mtarikucar/claude-password-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A local, encrypted password-manager MCP server that lets Claude Code use your own credentials with per-access auditing. Works on Linux, macOS and Windows.",
   "type": "module",
   "license": "MIT",
@@ -43,7 +43,7 @@
     "dev:server": "tsx src/server.ts",
     "dev:cli": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx test/vault.test.ts",
+    "test": "tsx test/vault.test.ts && tsx test/injector.test.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {

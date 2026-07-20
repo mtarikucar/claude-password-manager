@@ -14,8 +14,10 @@ logged**:
   file. The key is derived from a master password (scrypt); the master password
   is never written to disk.
 - **Listing never leaks secrets** — `list_credentials` returns only
-  names/usernames/URLs/tags. Revealing a password is a separate `get_credential`
-  call that requires a stated reason.
+  names/usernames/URLs/tags. The agent can **type** a secret into a focused
+  field with `fill_credential` *without the value ever being returned to it*;
+  the plaintext-revealing `get_credential` is **off by default** (opt in with
+  `CCPM_ALLOW_REVEAL=1`). Either path requires a stated reason and is logged.
 - **Every access is audited** — reads and writes append a line to `audit.log`
   (timestamp, action, entry name, and the reason). Passwords are never logged.
 - **You stay in control** — Claude Code still prompts you to approve each tool
@@ -108,9 +110,11 @@ that file):
 ### 3. Verify & use
 
 Restart Claude Code, then ask it to call `vault_status` — you should see
-`state: unlocked`. Now prompts like *"get my GitHub token from the password
-manager and set the git remote"* trigger a `get_credential` call (which you
-approve). Review `audit.log` any time to see what was accessed.
+`state: unlocked`. Now a prompt like *"log into GitHub — focus the password
+field, then fill my GitHub password from the vault"* triggers a `fill_credential`
+call: the agent focuses the field and the server **types** the secret into it,
+without the password ever being returned to the agent. Review `audit.log` any
+time to see what was accessed.
 
 ---
 
@@ -120,7 +124,8 @@ approve). Review `audit.log` any time to see what was accessed.
 |------|-------------------|----------|---------|
 | `vault_status` | no | no | Lock state, path, entry count |
 | `list_credentials` | **no** | no | Browse entries by name/user/url/tag |
-| `get_credential` | **yes** (logged, needs reason) | no | Retrieve one secret |
+| `fill_credential` | **no** — types it into the focused field | no | Auto-type a secret without returning it |
+| `get_credential` | **yes** (opt-in `CCPM_ALLOW_REVEAL=1`, logged, needs reason) | no | Return one secret to the client |
 | `add_credential` | returns generated pw | yes | Store a new credential |
 | `update_credential` | no | yes | Change fields of an entry |
 | `delete_credential` | no | yes | Remove an entry |
@@ -129,6 +134,14 @@ approve). Review `audit.log` any time to see what was accessed.
 `pm-cli` mirrors these for terminal use: `init`, `add`, `list`, `get`,
 `update`, `rm`, `passwd` (change master password), `gen`, `path`.
 
+**About `fill_credential` (auto-type).** It types the secret into whatever
+window currently has focus — like a password manager's auto-type — so focus the
+target field first; it never presses Enter. The plaintext is written to the OS
+helper on stdin and is **never** returned to the agent or written to the log
+(only the entry name + reason are). Windows and macOS use built-in tooling
+(`SendKeys` / `osascript`); Linux uses `xdotool` (X11), so `apt install xdotool`
+if it is missing.
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -136,6 +149,7 @@ approve). Review `audit.log` any time to see what was accessed.
 | `CCPM_MASTER_PASSWORD` | Unlocks the vault. Required for all secret access. |
 | `CCPM_VAULT_PATH` | Override the vault file location. |
 | `CCPM_READONLY=1` | Disable all mutating tools (read-only server). |
+| `CCPM_ALLOW_REVEAL=1` | Expose `get_credential`, which **returns** plaintext to the client. Off by default — `fill_credential` (auto-type) is preferred. |
 
 ---
 
@@ -146,7 +160,7 @@ git clone https://github.com/mtarikucar/claude-password-manager.git
 cd claude-password-manager
 npm install
 npm run build      # compiles to dist/
-npm test           # runs the vault test suite (encryption, CRUD, rekey, generator)
+npm test           # runs the vault + injector test suites
 ```
 
 Run from source without publishing:

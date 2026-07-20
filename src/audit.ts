@@ -9,6 +9,7 @@ import { dirname } from "node:path";
 export type AuditAction =
   | "list"
   | "get"
+  | "fill"
   | "add"
   | "update"
   | "delete"

@@ -8,8 +8,10 @@
  *   - Passwords are encrypted at rest (see vault.ts); the master password is
  *     supplied out-of-band via the CCPM_MASTER_PASSWORD env var and is never
  *     persisted.
- *   - Listing never reveals secrets. Retrieving a secret is a separate,
- *     explicit tool call that requires a stated reason and is audit-logged.
+ *   - Listing never reveals secrets. The model can TYPE a secret into the
+ *     focused field (fill_credential) without the value being returned; the
+ *     plaintext-revealing get_credential is opt-in via CCPM_ALLOW_REVEAL=1.
+ *     Every access requires a stated reason and is audit-logged.
  *   - CCPM_READONLY=1 disables all mutating tools.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -23,6 +25,7 @@ import {
   auditLogPath,
 } from "./vault.js";
 import { AuditLog } from "./audit.js";
+import { injectKeystrokes, shouldExposeReveal } from "./injector.js";
 
 const VAULT_PATH = defaultVaultPath();
 const AUDIT = new AuditLog(auditLogPath(VAULT_PATH));
@@ -69,7 +72,7 @@ function openVault(): { vault: Vault } | { error: string } {
 
 const server = new McpServer({
   name: "claude-password-manager",
-  version: "1.0.0",
+  version: "1.0.1",
 });
 
 server.registerTool(
@@ -131,42 +134,90 @@ server.registerTool(
   },
 );
 
+// fill_credential TYPES a secret into the focused field without ever returning
+// it — this is how the model should use a password. get_credential (below)
+// instead RETURNS the plaintext to the client, so it is registered only when
+// explicitly opted in with CCPM_ALLOW_REVEAL=1.
 server.registerTool(
-  "get_credential",
+  "fill_credential",
   {
-    title: "Get a credential (reveals the password)",
+    title: "Type a credential into the focused field (never returns it)",
     description:
-      "Retrieve a single credential INCLUDING its password, by name or id. " +
-      "This is the only tool that reveals a secret; every call is audit-logged. " +
-      "Provide a short `reason` describing why the password is needed.",
+      "Auto-type a stored credential's password (or username) into whatever " +
+      "text field currently has OS focus. The value is TYPED, never returned — " +
+      "it never enters the client's context. Focus the target field first " +
+      "(same contract as a password manager's auto-type). Does NOT press Enter. " +
+      "Every call is audit-logged.",
     inputSchema: {
       name_or_id: z.string().describe("Exact credential name (case-insensitive) or its id"),
+      field: z
+        .enum(["password", "username"])
+        .optional()
+        .describe("Which field to type; defaults to password"),
       reason: z
         .string()
         .min(3)
-        .describe("Why the password is being retrieved — recorded in the audit log"),
+        .describe("Why the credential is being typed — recorded in the audit log"),
     },
   },
-  async ({ name_or_id, reason }) => {
+  async ({ name_or_id, field, reason }) => {
     const opened = openVault();
     if ("error" in opened) return fail(opened.error);
     try {
-      const e = opened.vault.get(name_or_id);
-      AUDIT.record("get", `${e.name} [${e.id}]`, reason);
-      const out = [
-        `name:     ${e.name}`,
-        `username: ${e.username ?? "—"}`,
-        `password: ${e.password ?? "—"}`,
-        `url:      ${e.url ?? "—"}`,
-        `notes:    ${e.notes ?? "—"}`,
-        `tags:     ${e.tags.length ? e.tags.join(", ") : "—"}`,
-      ].join("\n");
-      return ok(out);
+      const entry = opened.vault.get(name_or_id);
+      const which = field ?? "password";
+      const value = which === "username" ? entry.username : entry.password;
+      if (!value) return fail(`Credential "${entry.name}" has no ${which} to type.`);
+      await injectKeystrokes(value);
+      AUDIT.record("fill", `${entry.name} [${entry.id}]`, `${which}: ${reason}`);
+      return ok(
+        `Typed the ${which} of "${entry.name}" into the focused window. ` +
+          `The value never left the vault.`,
+      );
     } catch (err) {
       return fail((err as Error).message);
     }
   },
 );
+
+if (shouldExposeReveal(process.env)) {
+  server.registerTool(
+    "get_credential",
+    {
+      title: "Get a credential (reveals the password)",
+      description:
+        "Retrieve a single credential INCLUDING its password, by name or id. " +
+        "This is the only tool that reveals a secret; every call is audit-logged. " +
+        "Provide a short `reason` describing why the password is needed.",
+      inputSchema: {
+        name_or_id: z.string().describe("Exact credential name (case-insensitive) or its id"),
+        reason: z
+          .string()
+          .min(3)
+          .describe("Why the password is being retrieved — recorded in the audit log"),
+      },
+    },
+    async ({ name_or_id, reason }) => {
+      const opened = openVault();
+      if ("error" in opened) return fail(opened.error);
+      try {
+        const e = opened.vault.get(name_or_id);
+        AUDIT.record("get", `${e.name} [${e.id}]`, reason);
+        const out = [
+          `name:     ${e.name}`,
+          `username: ${e.username ?? "—"}`,
+          `password: ${e.password ?? "—"}`,
+          `url:      ${e.url ?? "—"}`,
+          `notes:    ${e.notes ?? "—"}`,
+          `tags:     ${e.tags.length ? e.tags.join(", ") : "—"}`,
+        ].join("\n");
+        return ok(out);
+      } catch (err) {
+        return fail((err as Error).message);
+      }
+    },
+  );
+}
 
 server.registerTool(
   "add_credential",
