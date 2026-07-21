@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { width: 300px; margin: 0; font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; background: #0f2350; color: #eef2fb; }
+    header { padding: 14px 16px 10px; display: flex; align-items: center; gap: 8px; }
+    header b { font-size: 14px; }
+    #status { padding: 0 16px 10px; color: #9fb0d0; font-size: 12px; }
+    .list { padding: 0 8px 12px; }
+    .item { display: flex; align-items: center; gap: 8px; padding: 9px 8px; border-radius: 8px; }
+    .item:hover { background: rgba(255,255,255,.06); }
+    .item .meta { flex: 1; min-width: 0; }
+    .item .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item .user { color: #9fb0d0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    button { background: #2458e6; color: #fff; border: 0; border-radius: 7px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+    .empty { padding: 10px 16px 16px; color: #9fb0d0; }
+    footer { padding: 8px 16px 14px; color: #6b7ba0; font-size: 11px; border-top: 1px solid rgba(255,255,255,.08); }
+  </style>
+</head>
+<body>
+  <header>🔐 <b>Jeeta Password Manager</b></header>
+  <div id="status">Kasa kontrol ediliyor…</div>
+  <div id="list" class="list"></div>
+  <footer>Şifreler yalnızca tarayıcı ↔ yerel kasa arasında gider.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>

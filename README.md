@@ -144,6 +144,31 @@ time to see what was accessed.
 
 ---
 
+## Browser extension — auto-save + autofill (Chrome / Edge)
+
+A bundled extension turns the vault into a real browser password manager:
+**when you log into a site it offers a one-click "Save"**, and it **autofills**
+saved logins when you focus the fields. Passwords flow only *browser → native
+host → local vault* — no AI, nothing leaves your machine.
+
+```bash
+# 1) Register the native host + stage the extension (also copies a
+#    self-contained host into your config dir; no global install needed).
+npx -y -p @mtarikucar/claude-password-manager pm-cli browser-install
+```
+
+Then load it once:
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode** (top-right)
+3. **Load unpacked** → select the folder the command printed
+   (`…/claude-password-manager/extension`)
+
+Now log into any site — a save banner appears; next time the login autofills.
+Uses the same OS-protected vault as the CLI/MCP, so there's nothing else to set up.
+
+---
+
 ## Tools exposed
 
 | Tool | Reveals password? | Mutates? | Purpose |
