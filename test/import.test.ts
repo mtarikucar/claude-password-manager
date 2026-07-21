@@ -108,5 +108,33 @@ function check(name: string, cond: boolean) {
   check("duplicate entries collapsed", out.filter((e) => e.name === "Dup").length === 1);
 }
 
+// --- Multiple secrets in one section -> one entry per secret --------------
+{
+  const md = ["## TikTok", "Client Key: ck_123", "Client Secret: cs_456", "Access Token: at_789"].join("\n");
+  const out = parseSecretsMarkdown(md);
+  const forTk = out.filter((e) => e.name.startsWith("TikTok"));
+  check("multi-secret section yields 3 entries", forTk.length === 3);
+  check("multi-secret names include the key label", forTk.some((e) => /Client Secret/i.test(e.name) && e.password === "cs_456"));
+  check("multi-secret keeps each value", forTk.some((e) => e.password === "ck_123") && forTk.some((e) => e.password === "at_789"));
+}
+
+// --- Inline "(şifre X)" is split out of the username ----------------------
+{
+  const md = ["## FB Business", "Hesap: tarik@example.com (şifre Merhabalar06.)"].join("\n");
+  const out = parseSecretsMarkdown(md);
+  const e = out.find((x) => x.name === "FB Business");
+  check("inline (şifre X) -> password", e?.password === "Merhabalar06.");
+  check("inline (şifre X) -> username cleaned", e?.username === "tarik@example.com");
+}
+
+// --- A bare keyword value is not mistaken for a username -----------------
+{
+  const md = ["## Insta", "Kullanıcı: Şifre", "Password: realpass"].join("\n");
+  const out = parseSecretsMarkdown(md);
+  const e = out.find((x) => x.name === "Insta");
+  check("bare 'Şifre' rejected as username", e?.username === undefined);
+  check("real password still captured", e?.password === "realpass");
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
