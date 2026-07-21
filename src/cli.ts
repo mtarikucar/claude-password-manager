@@ -18,10 +18,9 @@
  *   pm-cli path              # print vault + audit-log locations
  */
 import { createInterface } from "node:readline";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { Vault, WrongPasswordError, generatePassword, defaultVaultPath, auditLogPath } from "./vault.js";
-import { parseSecretsMarkdown } from "./import.js";
 import { storeOsSecret } from "./oskey.js";
 import { resolveMaster } from "./master.js";
 
@@ -186,38 +185,6 @@ async function main() {
       }
       return;
     }
-    case "import": {
-      const file = positional[0];
-      if (!file) return usage("import needs a <file> (e.g. secrets.md)");
-      let text: string;
-      try {
-        text = readFileSync(file, "utf8");
-      } catch {
-        console.error(`Cannot read file: ${file}`);
-        process.exit(1);
-      }
-      const parsed = parseSecretsMarkdown(text);
-      if (parsed.length === 0) {
-        console.log("No credentials recognised in that file. Add them individually with `pm-cli add`.");
-        return;
-      }
-      const vault = await open();
-      let added = 0;
-      const skipped: string[] = [];
-      for (const c of parsed) {
-        try {
-          vault.add({ name: c.name, username: c.username, password: c.password, url: c.url });
-          added++;
-          console.log(`  + ${c.name}`);
-        } catch (e) {
-          skipped.push(`${c.name} (${(e as Error).message.split(".")[0]})`);
-        }
-      }
-      console.log(`\nImported ${added} credential(s); skipped ${skipped.length}. No passwords were printed.`);
-      if (skipped.length) console.log(`Skipped: ${skipped.join(", ")}`);
-      console.log("Review them with `pm-cli list`.");
-      return;
-    }
     case "list": {
       const vault = await open();
       const items = vault.list({ query: positional[0] });
@@ -314,13 +281,11 @@ function usage(msg?: string) {
       "  init                       create a password-protected vault",
       "  rekey [--to-password]      convert the vault to OS-protected (default) or back to a password",
       "  add <name> [flags]         add a credential (--user --url --notes --tags a,b --pass P | --gen)",
-      "  import <file>              bulk-load credentials from a markdown/text secrets file",
       "  list [query]               list credentials (no passwords)",
       "  get <name|id>              show one credential including its password",
       "  update <name|id> [flags]   change fields (--name --user --pass --url --notes --tags)",
       "  rm <name|id>               delete a credential",
       "  passwd                     change the master password",
-      "  import <file>              bulk-load credentials from a markdown/text file (no values printed)",
       "  gen [length]               print a strong password (not stored)",
       "  path                       print vault + audit-log paths",
     ].join("\n"),
