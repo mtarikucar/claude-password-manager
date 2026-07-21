@@ -35,25 +35,35 @@ Installing it does **not** give anyone your passwords.
 
 ### 1. Create your vault and add credentials
 
-Do this yourself in a terminal — Claude never needs your master password, only
-the vault it unlocks. **If you lose the master password, the vault cannot be
-recovered.**
+Do this yourself in a terminal — Claude only ever gets the unlocked vault.
+
+**Recommended — OS-protected, no master password (truly one command):**
 
 ```bash
-# You'll be prompted for the master password (never echoed).
-npx -y -p @mtarikucar/claude-password-manager pm-cli init
+# Encrypts the vault with your OS credential store (Windows DPAPI /
+# macOS Keychain / Linux libsecret). Nothing to remember, nothing in any config.
+npx -y -p @mtarikucar/claude-password-manager pm-cli setup
+```
 
-# Add credentials. Omit --pass to auto-generate a strong one.
+The vault is then bound to this machine + user account (not portable). Want a
+portable, passphrase-protected vault instead? Use `init` (**if you lose the
+master password the vault cannot be recovered**):
+
+```bash
+npx -y -p @mtarikucar/claude-password-manager pm-cli init   # prompts for a master password
+```
+
+Then add credentials (works for either vault type):
+
+```bash
+# Omit --pass to auto-generate a strong one.
 npx -y -p @mtarikucar/claude-password-manager pm-cli add GitHub --user you --url https://github.com --pass 'your-token'
 npx -y -p @mtarikucar/claude-password-manager pm-cli add Gmail  --user you@gmail.com --gen
 
-# Already keep a secrets file? Bulk-load it. The parser recognises headings +
-# "Password:/Username:/URL:" lines, markdown tables, and "user@x / pass" pairs.
-# It runs on YOUR machine — secret values are never printed and never leave it.
+# Already keep a secrets file? Bulk-load it (runs locally; values never printed).
 npx -y -p @mtarikucar/claude-password-manager pm-cli import ./secrets.md
 
 npx -y -p @mtarikucar/claude-password-manager pm-cli list   # names only, no passwords
-npx -y -p @mtarikucar/claude-password-manager pm-cli path   # where the vault + audit log live
 ```
 
 The vault is created with `0600` permissions at:
@@ -67,9 +77,16 @@ Override with the `CCPM_VAULT_PATH` env var.
 
 ### 2. Register the server with Claude Code
 
-The master password is read from the server's own environment
-(`CCPM_MASTER_PASSWORD`). The recommended, config-free approach is to export it in
-the shell you launch Claude from:
+**If you used `pm-cli setup` (OS-protected), there is nothing to configure** — no
+password, no env. Just register the server and restart Claude Code:
+
+```bash
+claude mcp add passwords -- npx -y -p @mtarikucar/claude-password-manager claude-password-manager
+```
+
+For a **master-password** vault (`init`), the password is read from the server's
+own environment (`CCPM_MASTER_PASSWORD`). The recommended, config-free approach is
+to export it in the shell you launch Claude from:
 
 ```bash
 # macOS / Linux

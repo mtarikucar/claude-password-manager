@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Vault, WrongPasswordError, generatePassword } from "../src/vault.js";
+import { Vault, WrongPasswordError, generatePassword, readVaultKeySource } from "../src/vault.js";
 
 let passed = 0;
 let failed = 0;
@@ -92,6 +92,16 @@ try {
   expectThrow("old master fails after passwd", () => oldKey.verify(), WrongPasswordError);
   const newKey = new Vault(vaultPath, "brand-new-master");
   check("new master works after passwd", newKey.get("Email").password === "s3cret");
+
+  // Key-source marker: default is "password"; an OS-keyed vault records "os".
+  check("default vault keySource is password", readVaultKeySource(vaultPath) === "password");
+  const osPath = join(dir, "os-vault.json");
+  const osSecret = "os-managed-random-secret";
+  const osVault = new Vault(osPath, osSecret, "os");
+  osVault.init();
+  osVault.add({ name: "OsEntry", password: "kept" });
+  check("os vault reports keySource os", readVaultKeySource(osPath) === "os");
+  check("os vault decrypts with its secret", new Vault(osPath, osSecret, "os").get("OsEntry").password === "kept");
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

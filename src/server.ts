@@ -17,15 +17,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { existsSync } from "node:fs";
 import {
   Vault,
   WrongPasswordError,
   generatePassword,
   defaultVaultPath,
   auditLogPath,
+  readVaultKeySource,
 } from "./vault.js";
 import { AuditLog } from "./audit.js";
 import { injectKeystrokes, shouldExposeReveal } from "./injector.js";
+import { resolveMaster } from "./master.js";
 
 const VAULT_PATH = defaultVaultPath();
 const AUDIT = new AuditLog(auditLogPath(VAULT_PATH));
@@ -43,27 +46,34 @@ function fail(text: string) {
  * Returns an error-result string instead of throwing so each tool can bail out
  * cleanly with a helpful message.
  */
-function openVault(): { vault: Vault } | { error: string } {
-  const master = process.env.CCPM_MASTER_PASSWORD;
-  if (!master) {
+async function openVault(): Promise<{ vault: Vault } | { error: string }> {
+  if (!existsSync(VAULT_PATH)) {
+    return {
+      error: `No vault exists yet at ${VAULT_PATH}. Create one with "pm-cli setup" (OS-protected) or "pm-cli init".`,
+    };
+  }
+  const resolved = await resolveMaster(VAULT_PATH);
+  if (!resolved) {
+    if (readVaultKeySource(VAULT_PATH) === "os") {
+      return {
+        error:
+          "Vault is OS-protected but its key could not be retrieved from the OS " +
+          "credential store (different user/machine, or the key file was removed).",
+      };
+    }
     return {
       error:
         "Vault is locked: CCPM_MASTER_PASSWORD is not set. Add it to this " +
         "server's `env` block in your MCP config, then restart the client.",
     };
   }
-  const vault = new Vault(VAULT_PATH, master);
-  if (!vault.exists()) {
-    return {
-      error: `No vault exists yet at ${VAULT_PATH}. Create one with "pm-cli init".`,
-    };
-  }
+  const vault = new Vault(VAULT_PATH, resolved.master, resolved.keySource);
   try {
     vault.verify();
   } catch (e) {
     if (e instanceof WrongPasswordError) {
       AUDIT.record("unlock_failed");
-      return { error: "The configured master password does not match this vault." };
+      return { error: "The configured master password/key does not match this vault." };
     }
     return { error: `Could not open vault: ${(e as Error).message}` };
   }
@@ -72,7 +82,7 @@ function openVault(): { vault: Vault } | { error: string } {
 
 const server = new McpServer({
   name: "claude-password-manager",
-  version: "1.0.1",
+  version: "1.0.3",
 });
 
 server.registerTool(
@@ -85,14 +95,14 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const master = process.env.CCPM_MASTER_PASSWORD;
+    const keySource = existsSync(VAULT_PATH) ? readVaultKeySource(VAULT_PATH) : "password";
     const lines = [
       `vault path : ${VAULT_PATH}`,
       `audit log  : ${auditLogPath(VAULT_PATH)}`,
       `read-only  : ${READONLY ? "yes" : "no"}`,
-      `master pw  : ${master ? "set" : "NOT set (vault locked)"}`,
+      `key source : ${keySource === "os" ? "OS credential store (no master password)" : "master password (CCPM_MASTER_PASSWORD)"}`,
     ];
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) {
       lines.push(`state      : locked — ${opened.error}`);
       return ok(lines.join("\n"));
@@ -117,7 +127,7 @@ server.registerTool(
     },
   },
   async ({ query, tag }) => {
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) return fail(opened.error);
     const items = opened.vault.list({ query, tag });
     AUDIT.record("list", undefined, `${items.length} result(s)`);
@@ -161,7 +171,7 @@ server.registerTool(
     },
   },
   async ({ name_or_id, field, reason }) => {
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) return fail(opened.error);
     try {
       const entry = opened.vault.get(name_or_id);
@@ -198,7 +208,7 @@ if (shouldExposeReveal(process.env)) {
       },
     },
     async ({ name_or_id, reason }) => {
-      const opened = openVault();
+      const opened = await openVault();
       if ("error" in opened) return fail(opened.error);
       try {
         const e = opened.vault.get(name_or_id);
@@ -240,7 +250,7 @@ server.registerTool(
   },
   async (input) => {
     if (READONLY) return fail("Server is read-only (CCPM_READONLY=1); cannot add.");
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) return fail(opened.error);
     try {
       const password = input.password ?? generatePassword({ length: 24 });
@@ -273,7 +283,7 @@ server.registerTool(
   },
   async ({ name_or_id, ...patch }) => {
     if (READONLY) return fail("Server is read-only (CCPM_READONLY=1); cannot update.");
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) return fail(opened.error);
     const clean = Object.fromEntries(
       Object.entries(patch).filter(([, v]) => v !== undefined),
@@ -300,7 +310,7 @@ server.registerTool(
   },
   async ({ name_or_id }) => {
     if (READONLY) return fail("Server is read-only (CCPM_READONLY=1); cannot delete.");
-    const opened = openVault();
+    const opened = await openVault();
     if ("error" in opened) return fail(opened.error);
     try {
       const e = opened.vault.remove(name_or_id);
