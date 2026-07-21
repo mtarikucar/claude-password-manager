@@ -305,6 +305,15 @@ export class Vault {
     const rekeyed = new Vault(this.path, newPassword);
     rekeyed.write(data);
   }
+
+  /**
+   * Re-encrypt the vault under a new secret and key source — e.g. converting a
+   * password vault to OS-protected (or back) while preserving every entry.
+   */
+  reKey(newSecret: string, newKeySource: KeySource): void {
+    const data = this.read();
+    new Vault(this.path, newSecret, newKeySource).write(data);
+  }
 }
 
 /**
