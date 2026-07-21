@@ -82,7 +82,7 @@ async function openVault(): Promise<{ vault: Vault } | { error: string }> {
 
 const server = new McpServer({
   name: "claude-password-manager",
-  version: "1.0.5",
+  version: "1.0.6",
 });
 
 server.registerTool(

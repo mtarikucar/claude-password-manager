@@ -67,9 +67,6 @@ Then add credentials (works for either vault type):
 npx -y -p @mtarikucar/claude-password-manager pm-cli add GitHub --user you --url https://github.com --pass 'your-token'
 npx -y -p @mtarikucar/claude-password-manager pm-cli add Gmail  --user you@gmail.com --gen
 
-# Already keep a secrets file? Bulk-load it (runs locally; values never printed).
-npx -y -p @mtarikucar/claude-password-manager pm-cli import ./secrets.md
-
 npx -y -p @mtarikucar/claude-password-manager pm-cli list   # names only, no passwords
 ```
 
