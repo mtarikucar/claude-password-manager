@@ -31,6 +31,13 @@ function clean(v: string): string {
   return v.trim().replace(/[`*]/g, "").trim();
 }
 
+// A value that is JUST a field label (e.g. a table header cell "Şifre") must not
+// be mistaken for a real username/secret.
+const KEYWORD_ONLY = /^(ş?ifre|parola|password|pass|pwd|kullan[ıi]c[ıi]|username|user|e-?posta|e-?mail|mail|url|token|secret|key|api[_ -]?key)$/i;
+function isKeywordOnly(v: string): boolean {
+  return KEYWORD_ONLY.test(v.trim());
+}
+
 export function parseSecretsMarkdown(text: string): ParsedCredential[] {
   const out: ParsedCredential[] = [];
   // Split into sections, keeping each heading at the start of its chunk.
@@ -45,8 +52,14 @@ export function parseSecretsMarkdown(text: string): ParsedCredential[] {
     const name = (heading ? heading[1] : lines[0]).replace(/[`*|#]/g, "").trim() || "item";
 
     let username: string | undefined;
-    let password: string | undefined;
     let url: string | undefined;
+    // Collect EVERY secret in the section (a service often has key + secret +
+    // token), not just the first, so nothing is silently dropped.
+    const secrets: { label: string; value: string }[] = [];
+    const addSecret = (label: string, value: string) => {
+      const v = value.trim();
+      if (v && !isKeywordOnly(v)) secrets.push({ label: label.trim() || "secret", value: v });
+    };
 
     for (const line of lines) {
       // Markdown table row: | key | value |
@@ -55,22 +68,24 @@ export function parseSecretsMarkdown(text: string): ParsedCredential[] {
         const k = tbl[1].trim();
         const v = clean(tbl[2]);
         if (URL_START.test(v)) url ??= v;
-        else if (PASS_KEYS.test(k) && !PASS_KEYS.test(v) && !password) password = v;
-        else if (USER_KEYS.test(k) && !username) username = v;
+        else if (PASS_KEYS.test(k)) addSecret(k, v);
+        else if (USER_KEYS.test(k) && !username && !isKeywordOnly(v)) username = v;
         continue;
       }
       // key: value  (or key = value), optionally a "- " / "* " bullet
       const kv = line.match(/^[ \t]*[-*]?[ \t]*([^\n:=|]{2,40}?)[ \t]*[:=][ \t]*(\S.*?)[ \t]*$/);
       if (kv) {
         const k = kv[1].trim();
-        const v = clean(kv[2]);
-        if (URL_START.test(v)) {
-          url ??= v;
-        } else if (PASS_KEYS.test(k) && !PASS_KEYS.test(v) && !password) {
-          password = v;
-        } else if (USER_KEYS.test(k) && !username) {
-          username = v;
+        let v = clean(kv[2]);
+        // Split an inline "(şifre X)" / "(parola X)" / "(pass X)" out of the value.
+        const inline = v.match(/[([]\s*(?:ş?ifre|parola|pass(?:word)?)\s*[:=]?\s*([^)\]]+?)\s*[)\]]/i);
+        if (inline) {
+          addSecret("şifre", inline[1]);
+          v = v.replace(inline[0], "").trim();
         }
+        if (URL_START.test(v)) url ??= v;
+        else if (PASS_KEYS.test(k)) addSecret(k, v);
+        else if (USER_KEYS.test(k) && !username && v && !isKeywordOnly(v)) username = v;
       }
     }
 
@@ -79,18 +94,20 @@ export function parseSecretsMarkdown(text: string): ParsedCredential[] {
       if (u) url = u[0];
     }
 
-    if (password) out.push({ name, username, password, url });
-
     // Inline "email / password" or "email | password" (single line only).
     const pair = /([\w.\-+]+@[\w.\-]+\.\w{2,})[ \t]*[/|][ \t]*([^\s|`]{4,})/g;
     let m: RegExpExecArray | null;
     while ((m = pair.exec(sec)) !== null) {
-      out.push({
-        name: `${name} (${m[1]})`,
-        username: m[1],
-        password: m[2].replace(/[`*.,;]+$/, ""),
-        url,
-      });
+      username ??= m[1];
+      addSecret("giriş", m[2].replace(/[`*.,;]+$/, ""));
+    }
+
+    // One entry per secret: a lone secret takes the section name; multiple get
+    // "<section> · <label>" so none collides or is lost.
+    if (secrets.length === 1) {
+      out.push({ name, username, password: secrets[0].value, url });
+    } else {
+      for (const s of secrets) out.push({ name: `${name} · ${s.label}`, username, password: s.value, url });
     }
   }
 
