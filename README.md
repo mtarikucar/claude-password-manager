@@ -53,6 +53,13 @@ master password the vault cannot be recovered**):
 npx -y -p @mtarikucar/claude-password-manager pm-cli init   # prompts for a master password
 ```
 
+Already have a password vault and want to go passwordless? Convert it **in
+place** — every entry is kept, you enter your master once:
+
+```bash
+npx -y -p @mtarikucar/claude-password-manager pm-cli rekey
+```
+
 Then add credentials (works for either vault type):
 
 ```bash

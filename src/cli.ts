@@ -150,6 +150,42 @@ async function main() {
       console.log("  # then restart Claude Code");
       return;
     }
+    case "rekey": {
+      if (!existsSync(VAULT_PATH)) {
+        console.error(`No vault at ${VAULT_PATH}. Nothing to convert.`);
+        process.exit(1);
+      }
+      const toPassword = flags["to-password"] === true;
+      // open() decrypts with the current secret — it prompts for the master if
+      // this is a password vault, or reads the OS key if it is already OS-keyed.
+      const vault = await open();
+      if (toPassword) {
+        const next = await prompt("New master password: ", true);
+        const again = await prompt("Confirm new master password: ", true);
+        if (next !== again) {
+          console.error("Passwords do not match.");
+          process.exit(1);
+        }
+        vault.reKey(next, "password");
+        console.log("Vault converted to master-password protection.");
+        console.log("The server now needs CCPM_MASTER_PASSWORD (env or MCP config) to unlock it.");
+      } else {
+        const secret = generatePassword({ length: 44, symbols: false });
+        try {
+          await storeOsSecret(secret, { configDir: dirname(VAULT_PATH) });
+        } catch (e) {
+          console.error(`Could not store the key in the OS credential store: ${(e as Error).message}`);
+          process.exit(1);
+        }
+        vault.reKey(secret, "os");
+        console.log("Vault converted to OS-protected — no master password needed on this machine, nothing lost.\n");
+        console.log("If you registered the server with CCPM_MASTER_PASSWORD before, re-register WITHOUT it:");
+        console.log("  claude mcp remove passwords");
+        console.log("  claude mcp add passwords -- npx -y -p @mtarikucar/claude-password-manager claude-password-manager");
+        console.log("  # then restart Claude Code");
+      }
+      return;
+    }
     case "import": {
       const file = positional[0];
       if (!file) return usage("import needs a <file> (e.g. secrets.md)");
@@ -276,6 +312,7 @@ function usage(msg?: string) {
       "Commands:",
       "  setup                      create an OS-protected vault — no master password (recommended)",
       "  init                       create a password-protected vault",
+      "  rekey [--to-password]      convert the vault to OS-protected (default) or back to a password",
       "  add <name> [flags]         add a credential (--user --url --notes --tags a,b --pass P | --gen)",
       "  import <file>              bulk-load credentials from a markdown/text secrets file",
       "  list [query]               list credentials (no passwords)",

@@ -102,6 +102,16 @@ try {
   osVault.add({ name: "OsEntry", password: "kept" });
   check("os vault reports keySource os", readVaultKeySource(osPath) === "os");
   check("os vault decrypts with its secret", new Vault(osPath, osSecret, "os").get("OsEntry").password === "kept");
+
+  // reKey converts a populated password vault to OS-protected, losslessly.
+  const rkPath = join(dir, "rekey-vault.json");
+  const rk = new Vault(rkPath, "old-master");
+  rk.init();
+  rk.add({ name: "Keeper", username: "u", password: "p" });
+  rk.reKey("new-os-secret", "os");
+  check("reKey switches keySource to os", readVaultKeySource(rkPath) === "os");
+  check("reKey preserves entries under the new secret", new Vault(rkPath, "new-os-secret", "os").get("Keeper").password === "p");
+  check("reKey invalidates the old master", (() => { try { new Vault(rkPath, "old-master").get("Keeper"); return false; } catch { return true; } })());
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
