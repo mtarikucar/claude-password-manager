@@ -47,6 +47,11 @@ npx -y -p @mtarikucar/claude-password-manager pm-cli init
 npx -y -p @mtarikucar/claude-password-manager pm-cli add GitHub --user you --url https://github.com --pass 'your-token'
 npx -y -p @mtarikucar/claude-password-manager pm-cli add Gmail  --user you@gmail.com --gen
 
+# Already keep a secrets file? Bulk-load it. The parser recognises headings +
+# "Password:/Username:/URL:" lines, markdown tables, and "user@x / pass" pairs.
+# It runs on YOUR machine — secret values are never printed and never leave it.
+npx -y -p @mtarikucar/claude-password-manager pm-cli import ./secrets.md
+
 npx -y -p @mtarikucar/claude-password-manager pm-cli list   # names only, no passwords
 npx -y -p @mtarikucar/claude-password-manager pm-cli path   # where the vault + audit log live
 ```

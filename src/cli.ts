@@ -18,7 +18,9 @@
  *   pm-cli path              # print vault + audit-log locations
  */
 import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
 import { Vault, WrongPasswordError, generatePassword, defaultVaultPath, auditLogPath } from "./vault.js";
+import { parseSecretsMarkdown } from "./import.js";
 
 const VAULT_PATH = defaultVaultPath();
 
@@ -120,6 +122,38 @@ async function main() {
       if (!flags.pass) console.log(`Password: ${finalPassword}`);
       return;
     }
+    case "import": {
+      const file = positional[0];
+      if (!file) return usage("import needs a <file> (e.g. secrets.md)");
+      let text: string;
+      try {
+        text = readFileSync(file, "utf8");
+      } catch {
+        console.error(`Cannot read file: ${file}`);
+        process.exit(1);
+      }
+      const parsed = parseSecretsMarkdown(text);
+      if (parsed.length === 0) {
+        console.log("No credentials recognised in that file. Add them individually with `pm-cli add`.");
+        return;
+      }
+      const vault = await open();
+      let added = 0;
+      const skipped: string[] = [];
+      for (const c of parsed) {
+        try {
+          vault.add({ name: c.name, username: c.username, password: c.password, url: c.url });
+          added++;
+          console.log(`  + ${c.name}`);
+        } catch (e) {
+          skipped.push(`${c.name} (${(e as Error).message.split(".")[0]})`);
+        }
+      }
+      console.log(`\nImported ${added} credential(s); skipped ${skipped.length}. No passwords were printed.`);
+      if (skipped.length) console.log(`Skipped: ${skipped.join(", ")}`);
+      console.log("Review them with `pm-cli list`.");
+      return;
+    }
     case "list": {
       const vault = await open();
       const items = vault.list({ query: positional[0] });
@@ -177,6 +211,38 @@ async function main() {
       console.log("Master password changed.");
       return;
     }
+    case "import": {
+      const file = positional[0];
+      if (!file) return usage("import needs a <file> (e.g. secrets.md)");
+      let text: string;
+      try {
+        text = readFileSync(file, "utf8");
+      } catch {
+        console.error(`Cannot read file: ${file}`);
+        process.exit(1);
+      }
+      const parsed = parseSecretsMarkdown(text);
+      if (parsed.length === 0) {
+        console.log("No credentials recognised in that file.");
+        return;
+      }
+      const vault = await open();
+      let added = 0;
+      const skipped: string[] = [];
+      for (const c of parsed) {
+        try {
+          vault.add({ name: c.name, username: c.username, password: c.password, url: c.url });
+          console.log(`  + ${c.name}`);
+          added++;
+        } catch (e) {
+          skipped.push(`${c.name} (${(e as Error).message.split(".")[0]})`);
+        }
+      }
+      console.log(`\nImported ${added} credential(s); skipped ${skipped.length}.`);
+      if (skipped.length) console.log(`Skipped: ${skipped.join(", ")}`);
+      console.log('No passwords were printed. Review names with "pm-cli list".');
+      return;
+    }
     default:
       return usage();
   }
@@ -210,11 +276,13 @@ function usage(msg?: string) {
       "Commands:",
       "  init                       create a new encrypted vault",
       "  add <name> [flags]         add a credential (--user --url --notes --tags a,b --pass P | --gen)",
+      "  import <file>              bulk-load credentials from a markdown/text secrets file",
       "  list [query]               list credentials (no passwords)",
       "  get <name|id>              show one credential including its password",
       "  update <name|id> [flags]   change fields (--name --user --pass --url --notes --tags)",
       "  rm <name|id>               delete a credential",
       "  passwd                     change the master password",
+      "  import <file>              bulk-load credentials from a markdown/text file (no values printed)",
       "  gen [length]               print a strong password (not stored)",
       "  path                       print vault + audit-log paths",
     ].join("\n"),
