@@ -23,6 +23,7 @@ import { dirname } from "node:path";
 import { Vault, WrongPasswordError, generatePassword, defaultVaultPath, auditLogPath } from "./vault.js";
 import { storeOsSecret } from "./oskey.js";
 import { resolveMaster } from "./master.js";
+import { browserInstall } from "./browser-install.js";
 
 const VAULT_PATH = defaultVaultPath();
 
@@ -242,6 +243,20 @@ async function main() {
       console.log("Master password changed.");
       return;
     }
+    case "browser-install": {
+      const r = browserInstall();
+      console.log(`Native host registered for: ${r.registered.length ? r.registered.join(", ") : "(no supported browser found)"}`);
+      console.log(`Host files: ${r.hostDir}\n`);
+      console.log("Load the extension (one time):");
+      console.log("  1. Open  chrome://extensions");
+      console.log("  2. Enable 'Developer mode' (top-right)");
+      console.log("  3. Click 'Load unpacked' and select this folder:");
+      console.log(`       ${r.extensionDir}`);
+      console.log(`     (its Extension ID must be  ${r.extensionId})\n`);
+      console.log("Done — log into any site: a 'Kaydet' banner offers to save it,");
+      console.log("and saved logins autofill when you focus the login fields.");
+      return;
+    }
     default:
       return usage();
   }
@@ -288,6 +303,7 @@ function usage(msg?: string) {
       "  passwd                     change the master password",
       "  gen [length]               print a strong password (not stored)",
       "  path                       print vault + audit-log paths",
+      "  browser-install            install the Chrome/Edge extension bridge (auto-save + autofill)",
     ].join("\n"),
   );
   process.exit(msg ? 1 : 0);

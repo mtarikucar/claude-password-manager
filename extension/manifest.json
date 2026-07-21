@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Claude Password Manager",
+  "version": "1.0.0",
+  "description": "Auto-save and autofill logins to your local, OS-protected Claude Password Manager vault.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArimGX4R6Adt7mzUdHnkVxlS5iiN/poRkyiHtwKzmhAi+gGCXql5x1/VQTyK3ecImYNXtz3BOK9IYItb0T/Tb1Vk3QSg4RmGHjCPeMt/wPd8lHonDh9+qrz2AHqQsVzCBFkG9hkS4L1j7frCxCBX/pMMHR+fNdEk7VmY/scvJXzHEIto2q30ZK0C8p9fEt8gYrn+A6zaz6Tt2L6wo1xR5mxJil3Ju56tyyP9yFj8ZkZoPrquOwu79uqRj015soNLQlHOLycN9FScbS5Y+VlAx4oUGAwKucbAjhM1oWcY+urcxLOo3Gd6RtpblHNfRIGT5M0sJl66VwZjikIZJ3MgyVQIDAQAB",
+  "permissions": ["nativeMessaging", "activeTab", "tabs", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Claude Password Manager" }
+}

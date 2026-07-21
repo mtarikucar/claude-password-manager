@@ -17,6 +17,7 @@ import {
 import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { domainMatches } from "./domain.js";
 
 export interface Credential {
   id: string;
@@ -203,6 +204,13 @@ export class Vault {
           e.tags.some((t) => t.toLowerCase().includes(q))
         );
       })
+      .map(({ password: _password, ...rest }) => rest);
+  }
+
+  /** Entries whose stored URL belongs to the given page URL (browser autofill). No passwords. */
+  matchUrl(pageUrl: string): Omit<Credential, "password">[] {
+    return this.read()
+      .entries.filter((e) => domainMatches(e.url, pageUrl))
       .map(({ password: _password, ...rest }) => rest);
   }
 
