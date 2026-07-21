@@ -103,8 +103,8 @@ async function main(): Promise<void> {
       // picked up (resolveMaster memoises the OS key, so this stays cheap).
       openVault()
         .then((vault) => handleMessage(msg, vault))
-        .then((resp) => send({ ...(resp as Record<string, unknown>), id: msg.id }))
-        .catch((err) => send({ ok: false, error: String(err), id: msg.id }));
+        .then((resp) => send({ ...(resp as Record<string, unknown>), _rid: msg._rid }))
+        .catch((err) => send({ ok: false, error: String(err), _rid: msg._rid }));
     }
   });
   process.stdin.on("end", () => process.exit(0));

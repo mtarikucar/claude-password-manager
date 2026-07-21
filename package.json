@@ -1,6 +1,6 @@
 {
   "name": "@mtarikucar/claude-password-manager",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A local, encrypted password-manager MCP server that lets Claude Code use your own credentials with per-access auditing. Works on Linux, macOS and Windows.",
   "type": "module",
   "license": "MIT",

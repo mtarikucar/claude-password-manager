@@ -18,10 +18,10 @@ function getPort() {
     return null;
   }
   port.onMessage.addListener((resp) => {
-    const id = resp && resp.id;
-    const resolve = pending.get(id);
+    const rid = resp && resp._rid;
+    const resolve = pending.get(rid);
     if (resolve) {
-      pending.delete(id);
+      pending.delete(rid);
       resolve(resp);
     }
   });
@@ -38,18 +38,18 @@ function nativeRequest(message) {
   return new Promise((resolve) => {
     const p = getPort();
     if (!p) return resolve({ ok: false, error: "native host not reachable — run `pm-cli browser-install`" });
-    const id = ++seq;
-    pending.set(id, resolve);
+    const rid = ++seq;
+    pending.set(rid, resolve);
     try {
-      p.postMessage({ ...message, id });
+      p.postMessage({ ...message, _rid: rid });
     } catch (e) {
-      pending.delete(id);
+      pending.delete(rid);
       resolve({ ok: false, error: String(e) });
     }
     // Safety timeout so a stuck host doesn't hang the popup/content script.
     setTimeout(() => {
-      if (pending.has(id)) {
-        pending.delete(id);
+      if (pending.has(rid)) {
+        pending.delete(rid);
         resolve({ ok: false, error: "timeout" });
       }
     }, 8000);
