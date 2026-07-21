@@ -30,8 +30,12 @@ export interface Credential {
   updatedAt: string;
 }
 
+export type KeySource = "password" | "os";
+
 interface EncryptedVaultFile {
   version: 1;
+  /** Where the master secret comes from: a user password (default) or the OS store. */
+  keySource?: KeySource;
   kdf: { algo: "scrypt"; salt: string; N: number; r: number; p: number; keylen: number };
   cipher: "aes-256-gcm";
   iv: string;
@@ -67,6 +71,19 @@ export function auditLogPath(vaultPath: string): string {
   return join(dirname(vaultPath), "audit.log");
 }
 
+/**
+ * Read a vault's key-source marker WITHOUT decrypting it, so a caller can
+ * decide where to get the master secret (user password vs OS store).
+ */
+export function readVaultKeySource(path: string): KeySource {
+  try {
+    const file = JSON.parse(readFileSync(path, "utf8")) as EncryptedVaultFile;
+    return file.keySource === "os" ? "os" : "password";
+  } catch {
+    return "password";
+  }
+}
+
 function deriveKey(masterPassword: string, salt: Buffer): Buffer {
   return scryptSync(masterPassword.normalize("NFKC"), salt, KDF_PARAMS.keylen, {
     N: KDF_PARAMS.N,
@@ -76,7 +93,7 @@ function deriveKey(masterPassword: string, salt: Buffer): Buffer {
   });
 }
 
-function serialize(data: VaultData, masterPassword: string): EncryptedVaultFile {
+function serialize(data: VaultData, masterPassword: string, keySource: KeySource = "password"): EncryptedVaultFile {
   const salt = randomBytes(16);
   const iv = randomBytes(12);
   const key = deriveKey(masterPassword, salt);
@@ -86,6 +103,7 @@ function serialize(data: VaultData, masterPassword: string): EncryptedVaultFile 
   const authTag = cipher.getAuthTag();
   return {
     version: 1,
+    keySource,
     kdf: { algo: "scrypt", salt: salt.toString("base64"), ...KDF_PARAMS },
     cipher: "aes-256-gcm",
     iv: iv.toString("base64"),
@@ -129,6 +147,7 @@ export class Vault {
   constructor(
     private readonly path: string,
     private readonly masterPassword: string,
+    private readonly keySource: KeySource = "password",
   ) {}
 
   exists(): boolean {
@@ -156,7 +175,7 @@ export class Vault {
 
   private write(data: VaultData): void {
     mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    const file = serialize(data, this.masterPassword);
+    const file = serialize(data, this.masterPassword, this.keySource);
     writeFileSync(this.path, JSON.stringify(file, null, 2), { mode: 0o600 });
     try {
       chmodSync(this.path, 0o600);

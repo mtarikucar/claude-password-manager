@@ -18,9 +18,12 @@
  *   pm-cli path              # print vault + audit-log locations
  */
 import { createInterface } from "node:readline";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { Vault, WrongPasswordError, generatePassword, defaultVaultPath, auditLogPath } from "./vault.js";
 import { parseSecretsMarkdown } from "./import.js";
+import { storeOsSecret } from "./oskey.js";
+import { resolveMaster } from "./master.js";
 
 const VAULT_PATH = defaultVaultPath();
 
@@ -122,6 +125,31 @@ async function main() {
       if (!flags.pass) console.log(`Password: ${finalPassword}`);
       return;
     }
+    case "setup": {
+      if (existsSync(VAULT_PATH)) {
+        console.error(`A vault already exists at ${VAULT_PATH}. Remove it first to re-run setup.`);
+        process.exit(1);
+      }
+      // A random secret plays the master's role; the OS credential store keeps
+      // it for this user account, so no password is ever needed on this machine.
+      const secret = generatePassword({ length: 44, symbols: false });
+      try {
+        await storeOsSecret(secret, { configDir: dirname(VAULT_PATH) });
+      } catch (e) {
+        console.error(`Could not store the key in the OS credential store: ${(e as Error).message}`);
+        process.exit(1);
+      }
+      new Vault(VAULT_PATH, secret, "os").init();
+      console.log(`Created an OS-protected vault at ${VAULT_PATH}.`);
+      console.log("No master password needed on this machine — the OS keeps the key for your user account.\n");
+      console.log("Next:");
+      console.log("  # add your credentials (or: pm-cli import secrets.md)");
+      console.log("  npx -y -p @mtarikucar/claude-password-manager pm-cli add GitHub --user you --gen");
+      console.log("  # register with Claude Code — NO secret in the config:");
+      console.log("  claude mcp add passwords -- npx -y -p @mtarikucar/claude-password-manager claude-password-manager");
+      console.log("  # then restart Claude Code");
+      return;
+    }
     case "import": {
       const file = positional[0];
       if (!file) return usage("import needs a <file> (e.g. secrets.md)");
@@ -211,55 +239,27 @@ async function main() {
       console.log("Master password changed.");
       return;
     }
-    case "import": {
-      const file = positional[0];
-      if (!file) return usage("import needs a <file> (e.g. secrets.md)");
-      let text: string;
-      try {
-        text = readFileSync(file, "utf8");
-      } catch {
-        console.error(`Cannot read file: ${file}`);
-        process.exit(1);
-      }
-      const parsed = parseSecretsMarkdown(text);
-      if (parsed.length === 0) {
-        console.log("No credentials recognised in that file.");
-        return;
-      }
-      const vault = await open();
-      let added = 0;
-      const skipped: string[] = [];
-      for (const c of parsed) {
-        try {
-          vault.add({ name: c.name, username: c.username, password: c.password, url: c.url });
-          console.log(`  + ${c.name}`);
-          added++;
-        } catch (e) {
-          skipped.push(`${c.name} (${(e as Error).message.split(".")[0]})`);
-        }
-      }
-      console.log(`\nImported ${added} credential(s); skipped ${skipped.length}.`);
-      if (skipped.length) console.log(`Skipped: ${skipped.join(", ")}`);
-      console.log('No passwords were printed. Review names with "pm-cli list".');
-      return;
-    }
     default:
       return usage();
   }
 }
 
 async function open(): Promise<Vault> {
-  const master = await getMaster();
-  const vault = new Vault(VAULT_PATH, master);
-  if (!vault.exists()) {
-    console.error(`No vault at ${VAULT_PATH}. Run "pm-cli init" first.`);
+  if (!existsSync(VAULT_PATH)) {
+    console.error(`No vault at ${VAULT_PATH}. Run "pm-cli setup" (OS-protected) or "pm-cli init" first.`);
     process.exit(1);
   }
+  // OS-keyed vaults resolve their secret from the OS store; password vaults use
+  // the env var or an interactive prompt.
+  const resolved = await resolveMaster(VAULT_PATH);
+  const master = resolved ? resolved.master : await getMaster();
+  const keySource = resolved ? resolved.keySource : "password";
+  const vault = new Vault(VAULT_PATH, master, keySource);
   try {
     vault.verify();
   } catch (e) {
     if (e instanceof WrongPasswordError) {
-      console.error("Wrong master password.");
+      console.error(keySource === "os" ? "The OS-stored key does not match this vault." : "Wrong master password.");
       process.exit(1);
     }
     throw e;
@@ -274,7 +274,8 @@ function usage(msg?: string) {
       "pm-cli — Claude Password Manager vault tool",
       "",
       "Commands:",
-      "  init                       create a new encrypted vault",
+      "  setup                      create an OS-protected vault — no master password (recommended)",
+      "  init                       create a password-protected vault",
       "  add <name> [flags]         add a credential (--user --url --notes --tags a,b --pass P | --gen)",
       "  import <file>              bulk-load credentials from a markdown/text secrets file",
       "  list [query]               list credentials (no passwords)",
